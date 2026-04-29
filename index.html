@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>钓中文鱼挑战赛 - 交互学习游戏</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        :root {
+            --ocean-blue: #0077be;
+            --deep-blue: #005088;
+            --sand-color: #f4d03f;
+            --coral-red: #ff7f50;
+            --success-green: #2ecc71;
+            --error-red: #e74c3c;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #f0f8ff;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        /* 游戏主容器 */
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(180deg, #4facfe 0%, #00f2fe 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 气泡动画 */
+        .bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            bottom: -50px;
+            animation: rise 8s infinite ease-in;
+            z-index: 1;
+        }
+
+        @keyframes rise {
+            0% { transform: translateY(0) scale(1); opacity: 0.5; }
+            100% { transform: translateY(-100vh) scale(1.5); opacity: 0; }
+        }
+
+        /* 计时器 */
+        #timer-display {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 24px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 20px;
+            z-index: 100;
+            border: 2px solid var(--sand-color);
+        }
+
+        /* 界面切换 */
+        .screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 25px;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            width: 90%;
+            max-width: 600px;
+        }
+
+        h1 { font-family: 'ZCOOL KuaiLe', cursive; font-size: 50px; color: var(--deep-blue); margin-bottom: 20px; }
+        
+        input[type="text"] {
+            padding: 12px 20px;
+            font-size: 20px;
+            border-radius: 12px;
+            border: 2px solid var(--ocean-blue);
+            width: 80%;
+            margin-bottom: 20px;
+            outline: none;
+        }
+
+        .btn {
+            padding: 12px 35px;
+            font-size: 20px;
+            background: var(--coral-red);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+            font-weight: bold;
+        }
+        .btn:hover { transform: scale(1.05); }
+
+        /* 题目区域 */
+        #question-area {
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70%;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            z-index: 50;
+        }
+
+        #stem-text { font-size: 28px; color: var(--deep-blue); font-weight: bold; }
+        #stem-english { font-size: 18px; color: #666; display: block; }
+
+        /* 小鱼 */
+        .fish {
+            position: absolute;
+            width: 150px;
+            height: 100px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            transition: transform 0.3s;
+        }
+
+        /* 用CSS画一个小鱼形状，避免图床失效 */
+        .fish-body {
+            position: absolute;
+            width: 100px;
+            height: 60px;
+            background: orange;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+        }
+        .fish-tail {
+            position: absolute;
+            right: -20px;
+            width: 40px;
+            height: 40px;
+            background: orange;
+            clip-path: polygon(100% 0, 0 50%, 100% 100%);
+        }
+
+        .fish-text {
+            position: relative;
+            z-index: 5;
+            font-size: 20px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 1px 1px 2px #000;
+        }
+
+        /* Tooltip */
+        #tooltip {
+            position: fixed;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 10px 15px;
+            border-radius: 8px;
+            pointer-events: none;
+            display: none;
+            z-index: 1000;
+            text-align: center;
+        }
+
+        #feedback-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 100px;
+            z-index: 200;
+            display: none;
+        }
+
+        .hidden { display: none !important; }
+
+        /* 学习报告表格 */
+        .report-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 16px; }
+        .report-table th { background: #f2f2f2; padding: 10px; }
+        .report-table td { padding: 10px; border-bottom: 1px solid #eee; }
+        .dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin: 0 2px; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="timer-display">用时: 00:00</div>
+
+    <div id="start-screen" class="screen">
+        <div class="glass-panel">
+            <h1>钓中文鱼挑战赛</h1>
+            <input type="text" id="student-name" placeholder="请输入你的姓名">
+            <br>
+            <button class="btn" onclick="startGame()">开始钓鱼</button>
+        </div>
+    </div>
+
+    <div id="game-screen" class="screen hidden">
+        <div id="question-area">
+            <span id="stem-text">加载中...</span>
+            <span id="stem-english">Loading...</span>
+        </div>
+        <div id="ocean-floor"></div>
+    </div>
+
+    <div id="result-screen" class="screen hidden">
+        <div class="glass-panel" style="max-width: 700px;">
+            <h2>学习成果报告</h2>
+            <p id="final-stats"></p>
+            <div style="max-height: 300px; overflow-y: auto;">
+                <table class="report-table">
+                    <thead><tr><th>题目</th><th>正确答案</th><th>尝试记录</th></tr></thead>
+                    <tbody id="report-body"></tbody>
+                </table>
+            </div>
+            <div style="margin-top: 20px;">
+                <button class="btn" onclick="downloadReport()" style="background:#27ae60">下载报告</button>
+                <button class="btn" onclick="location.reload()" style="background:#2980b9; margin-left:10px;">再玩一次</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="feedback-overlay"></div>
+    <div id="tooltip"></div>
+</div>
+
+<script>
+    const gameData = [
+        { stem: "我坐在草地上，", english: "I sat on the grass,", correct: "默默地", pinyin: "mò mò de", trans: "quietly" },
+        { stem: "天空的颜色", english: "The color of the sky", correct: "渐渐", pinyin: "jiàn jiàn", trans: "gradually" },
+        { stem: "小兔子趴着，", english: "The rabbit is lying,", correct: "总是", pinyin: "zǒng shì", trans: "always" },
+        { stem: "夕阳西下，", english: "As the sun sets,", correct: "暗了", pinyin: "àn le", trans: "became dark" },
+        { stem: "如果不查清楚，", english: "Without checking,", correct: "随便", pinyin: "suí biàn", trans: "casually" }
+    ];
+
+    const distractors = ["快乐地", "突然", "可能", "大声地", "快速", "一直", "拼命", "立刻"];
+
+    let currentQ = 0;
+    let studentName = "";
+    let startTime;
+    let timerInterval;
+    let attemptLogs = [];
+
+    function startGame() {
+        studentName = document.getElementById('student-name').value.trim();
+        if (!studentName) { alert("请输入姓名"); return; }
+        
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('game-screen').classList.remove('hidden');
+        
+        startTime = Date.now();
+        timerInterval = setInterval(updateTimer, 1000);
+        initBubbles();
+        loadQuestion();
+    }
+
+    function updateTimer() {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const s = String(elapsed % 60).padStart(2, '0');
+        document.getElementById('timer-display').innerText = `用时: ${m}:${s}`;
+    }
+
+    function initBubbles() {
+        for(let i=0; i<10; i++) {
+            const b = document.createElement('div');
+            b.className = 'bubble';
+            const size = Math.random() * 30 + 10;
+            b.style.width = size + 'px';
+            b.style.height = size + 'px';
+            b.style.left = Math.random() * 100 + '%';
+            b.style.animationDelay = Math.random() * 5 + 's';
+            document.getElementById('game-container').appendChild(b);
+        }
+    }
+
+    function loadQuestion() {
+        const data = gameData[currentQ];
+        document.getElementById('stem-text').innerText = data.stem;
+        document.getElementById('stem-english').innerText = data.english;
+        playTTS(data.stem);
+
+        const ocean = document.getElementById('ocean-floor');
+        ocean.innerHTML = "";
+        attemptLogs[currentQ] = [];
+
+        // 混合选项
+        let options = [data.correct];
+        let pool = [...distractors];
+        while(options.length < 4) {
+            let rand = pool.splice(Math.floor(Math.random()*pool.length), 1)[0];
+            options.push(rand);
+        }
+        options.sort(() => Math.random() - 0.5);
+
+        options.forEach((text, i) => {
+            const fish = document.createElement('div');
+            fish.className = 'fish';
+            fish.innerHTML = `<div class="fish-body" style="background:${getRandomColor()}"></div><div class="fish-tail" style="background:inherit"></div><span class="fish-text">${text}</span>`;
+            
+            let posX = Math.random() * (window.innerWidth - 150);
+            let posY = 150 + Math.random() * (window.innerHeight - 300);
+            fish.style.left = posX + 'px';
+            fish.style.top = posY + 'px';
+
+            // 简单的随机游动
+            let dx = (Math.random() - 0.5) * 2;
+            let dy = (Math.random() - 0.5) * 2;
+
+            function animateFish() {
+                if (!fish.parentElement) return;
+                posX += dx;
+                posY += dy;
+                if (posX < 0 || posX > window.innerWidth - 150) dx *= -1;
+                if (posY < 120 || posY > window.innerHeight - 150) dy *= -1;
+                fish.style.left = posX + 'px';
+                fish.style.top = posY + 'px';
+                fish.style.transform = dx > 0 ? 'scaleX(1)' : 'scaleX(-1)';
+                requestAnimationFrame(animateFish);
+            }
+            animateFish();
+
+            fish.onmouseover = (e) => {
+                const tt = document.getElementById('tooltip');
+                const isCorrect = text === data.correct;
+                tt.innerHTML = `<strong>${text}</strong><br>${isCorrect ? data.pinyin : '???'}<br>${isCorrect ? data.trans : '???'}`;
+                tt.style.display = 'block';
+                tt.style.left = e.clientX + 10 + 'px';
+                tt.style.top = e.clientY + 10 + 'px';
+                playTTS(text);
+            };
+            fish.onmouseout = () => document.getElementById('tooltip').style.display = 'none';
+            fish.onclick = () => checkAns(text, fish);
+            ocean.appendChild(fish);
+        });
+    }
+
+    function checkAns(txt, el) {
+        const correct = gameData[currentQ].correct;
+        const overlay = document.getElementById('feedback-overlay');
+        overlay.style.display = 'block';
+
+        if (txt === correct) {
+            overlay.innerText = '✅';
+            overlay.style.color = '#2ecc71';
+            attemptLogs[currentQ].push(true);
+            playTTS("答对了");
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                currentQ++;
+                if (currentQ < gameData.length) loadQuestion();
+                else showFinal();
+            }, 1000);
+        } else {
+            overlay.innerText = '❌';
+            overlay.style.color = '#e74c3c';
+            attemptLogs[currentQ].push(false);
+            playTTS("再试试");
+            setTimeout(() => overlay.style.display = 'none', 800);
+        }
+    }
+
+    function showFinal() {
+        clearInterval(timerInterval);
+        document.getElementById('game-screen').classList.add('hidden');
+        document.getElementById('result-screen').classList.remove('hidden');
+        document.getElementById('final-stats').innerText = `姓名: ${studentName} | ${document.getElementById('timer-display').innerText}`;
+        
+        const body = document.getElementById('report-body');
+        gameData.forEach((d, i) => {
+            const row = body.insertRow();
+            row.insertCell(0).innerText = d.stem;
+            row.insertCell(1).innerText = d.correct;
+            const logCell = row.insertCell(2);
+            attemptLogs[i].forEach(res => {
+                const dot = document.createElement('span');
+                dot.className = 'dot ' + (res ? 'style="background:#2ecc71"' : 'style="background:#e74c3c"');
+                dot.style.backgroundColor = res ? '#2ecc71' : '#e74c3c';
+                logCell.appendChild(dot);
+            });
+        });
+    }
+
+    function downloadReport() {
+        let content = `学习报告 - ${studentName}\n用时: ${document.getElementById('timer-display').innerText}\n\n`;
+        gameData.forEach((d, i) => {
+            content += `题目${i+1}: ${d.stem} | 答案: ${d.correct} | 尝试次数: ${attemptLogs[i].length}\n`;
+        });
+        const blob = new Blob([content], {type: 'text/plain'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Report_${studentName}.txt`;
+        a.click();
+        playTTS("下载完成，请交给老师");
+    }
+
+    function playTTS(t) {
+        const u = new SpeechSynthesisUtterance(t);
+        u.lang = 'zh-CN';
+        window.speechSynthesis.speak(u);
+    }
+
+    function getRandomColor() {
+        const colors = ['#ff7f50', '#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3'];
+        return colors[Math.floor(Math.random()*colors.length)];
+    }
+</script>
+</body>
+</html>
