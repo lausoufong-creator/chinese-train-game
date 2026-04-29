@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        :root { --cyan: #00ffff; --red: #ff4d4d; --black: #333; --blue: #007bff; }
+        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 1100px; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        
+        .main-game { display: flex; gap: 20px; margin-top: 20px; }
+        .quiz-table-wrapper { flex: 2; height: 600px; overflow-y: auto; }
+        .bank-wrapper { flex: 0.8; background: #e9ecef; padding: 15px; border-radius: 10px; height: 600px; overflow-y: auto; text-align: center; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #dee2e6; padding: 12px; text-align: center; }
+        th { background: #f8f9fa; position: sticky; top: 0; }
+        
+        .drop-zone { width: 140px; height: 45px; border: 2px dashed #bbb; background: #fff; transition: 0.3s; border-radius: 5px; }
+        .word-item { display: inline-block; padding: 8px 12px; margin: 5px; background: var(--blue); color: white; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .word-used { background: var(--black) !important; cursor: default; }
+        
+        .status-correct { background-color: var(--cyan) !important; color: #000; font-weight: bold; }
+        .status-wrong { background-color: var(--red) !important; color: white; }
+        
+        .hidden { display: none; }
+        button { padding: 12px 24px; font-size: 16px; cursor: pointer; border: none; border-radius: 8px; background: #28a745; color: white; margin: 10px; }
+        input { padding: 10px; font-size: 16px; width: 250px; border-radius: 5px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="login-page">
+        <h1>华文词语挑战赛</h1>
+        <p>进行游戏前要写上中文名字</p>
+        <input type="text" id="stuName" placeholder="在此输入中文名字">
+        <button onclick="startGame()">开始游戏</button>
+    </div>
+
+    <div id="game-page" class="hidden">
+        <div class="header">
+            <span id="display-name">学生: </span>
+            <span id="timer" style="color:red; font-weight:bold;">时间: 0s</span>
+        </div>
+        <div class="main-game">
+            <div class="quiz-table-wrapper">
+                <table>
+                    <thead><tr><th>汉语拼音 & 英文解释 (左)</th><th>填写词语 (中)</th></tr></thead>
+                    <tbody id="quiz-body"></tbody>
+                </table>
+            </div>
+            <div class="bank-wrapper">
+                <h4>词语选项 (右)</h4>
+                <p><small>点击听读音，拖动填表</small></p>
+                <div id="word-bank"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="report-page" class="hidden">
+        <h2 id="msg-finish"></h2>
+        <button onclick="downloadBank()">Download Word Bank</button>
+        <button id="btn-rep" class="hidden" onclick="showReport()">Collect Learning Report</button>
+        <div id="report-content" class="hidden" style="border: 2px solid #000; padding: 20px; text-align: left; margin: 20px 0;"></div>
+        <button id="btn-rev" class="hidden" onclick="showReview()">复习词语</button>
+    </div>
+
+    <div id="review-page" class="hidden">
+        <h3>词语复习表 (点击中文听读音)</h3>
+        <table id="rev-table"></table>
+        <button onclick="location.reload()">重新挑战</button>
+    </div>
+</div>
+
+<script>
+// 词语表 (附件中所有 24 个词语)
+const vocab = [
+    {c:"调皮", p:"tiáo pí", e:"Naughty"}, {c:"友善", p:"yǒu shàn", e:"Friendly"},
+    {c:"害羞", p:"hài xiū", e:"Shy"}, {c:"内疚", p:"nèi jiù", e:"Guilty"},
+    {c:"活泼", p:"huó pō", e:"Lively / Active"}, {c:"委屈", p:"wěi qu", e:"Felt wronged"},
+    {c:"渐渐地", p:"jiàn jiàn de", e:"Gradually"}, {c:"狠狠地", p:"hěn hěn de", e:"Severely / Hard"},
+    {c:"快快地", p:"kuài kuài de", e:"Quickly"}, {c:"浪费", p:"làng fèi", e:"To waste"},
+    {c:"资源", p:"zī yuán", e:"Resources"}, {c:"幸福", p:"xìng fú", e:"Happiness / Happy"},
+    {c:"糟糕", p:"zāo gāo", e:"Terrible / In a mess"}, {c:"平均", p:"píng jūn", e:"Average"},
+    {c:"至少", p:"zhì shǎo", e:"At least"}, {c:"感激", p:"gǎn jī", e:"Grateful"},
+    {c:"污染", p:"wū rǎn", e:"Pollution"}, {c:"上瘾", p:"shàng yǐn", e:"Addicted"},
+    {c:"捐钱", p:"juān qián", e:"Donate money"}, {c:"可爱", p:"kě ài", e:"Cute"},
+    {c:"体型", p:"tǐ xíng", e:"Body shape / Build"}, {c:"性格", p:"xìng gé", e:"Character / Personality"},
+    {c:"善良", p:"shàn liáng", e:"Kind-hearted"}, {c:"默默地", p:"mò mò de", e:"Silently / Quietly"}
+];
+
+let stuName = "", score = 0, time = 0, timerObj, completed = 0;
+let attempts = {};
+
+function speak(text) {
+    const msg = new SpeechSynthesisUtterance(text);
+    msg.lang = 'zh-CN';
+    window.speechSynthesis.speak(msg);
+}
+
+function startGame() {
+    stuName = document.getElementById('stuName').value;
+    if(!stuName) return alert("请输入你的中文名字！");
+    document.getElementById('login-page').className = 'hidden';
+    document.getElementById('game-page').className = '';
+    document.getElementById('display-name').innerText = "学生: " + stuName;
+    
+    speak("把正确的中文词语拖拉到相应的表格中。同时呈现英文解释。");
+    initGame();
+    timerObj = setInterval(() => { time++; document.getElementById('timer').innerText = `时间: ${time}s`; }, 1000);
+}
+
+function initGame() {
+    const bank = document.getElementById('word-bank');
+    const body = document.getElementById('quiz-body');
+    
+    // 随机打乱词语顺序 (确保不跟附件一样)
+    const shuffledBank = [...vocab].sort(() => Math.random() - 0.5);
+    const shuffledQuiz = [...vocab].sort(() => Math.random() - 0.5);
+
+    shuffledBank.forEach(item => {
+        attempts[item.c] = 0;
+        let d = document.createElement('div');
+        d.className = 'word-item';
+        d.id = "card-" + item.c;
+        d.innerText = item.c;
+        d.draggable = true;
+        d.onclick = () => speak(item.c);
+        d.ondragstart = (e) => e.dataTransfer.setData("text", item.c);
+        bank.appendChild(d);
+    });
+
+    shuffledQuiz.forEach((item, idx) => {
+        let row = body.insertRow();
+        row.innerHTML = `<td>${item.p} <br> <small>${item.e}</small></td><td><div class="drop-zone" data-ans="${item.c}"></div></td>`;
+        let zone = row.cells[1].children[0];
+        zone.ondragover = (e) => e.preventDefault();
+        zone.ondrop = (e) => handleDrop(e, zone);
+    });
+}
+
+function handleDrop(e, zone) {
+    const dragged = e.dataTransfer.getData("text");
+    const correct = zone.getAttribute('data-ans');
+    if (zone.innerText !== "") return;
+
+    attempts[correct]++;
+    if (dragged === correct) {
+        zone.innerText = dragged;
+        zone.className = "drop-zone status-correct";
+        document.getElementById("card-" + dragged).className = "word-item word-used";
+        speak("很好，答对了。");
+        if(attempts[correct] === 1) score += 3;
+        else if(attempts[correct] === 2) score += 2;
+        else score += 1;
+        checkWin();
+    } else {
+        zone.classList.add('status-wrong');
+        if(attempts[correct] === 1) speak("不对哦，再试试。");
+        else if(attempts[correct] === 2) {
+            const tip = vocab.find(v => v.c === correct).e;
+            speak("再试一次。提示：这个词的意思是 " + tip);
+        } else {
+            zone.innerText = correct;
+            zone.className = "drop-zone status-correct";
+            document.getElementById("card-" + correct).className = "word-item word-used";
+            speak("请记住正确答案和读音。");
+            checkWin();
+        }
+        setTimeout(() => { if(zone.innerText === "") zone.className = "drop-zone"; }, 1000);
+    }
+}
+
+function checkWin() {
+    completed++;
+    if(completed === vocab.length) {
+        clearInterval(timerObj);
+        document.getElementById('game-page').className = 'hidden';
+        document.getElementById('report-page').className = '';
+        document.getElementById('msg-finish').innerText = "很好你完成了，请下载word bank。";
+        speak("很好你完成了，请下载word bank。");
+    }
+}
+
+function downloadBank() {
+    alert("Word Bank 开始下载...");
+    speak("请点击 collect learning report");
+    document.getElementById('btn-rep').className = '';
+}
+
+function showReport() {
+    const area = document.getElementById('report-content');
+    area.className = '';
+    let gift = score >= 25 ? "如果你的总分是25分以上，请向老师领取礼物。" : "";
+    let html = `<h3>学习报告: ${stuName}</h3><p>时间: ${time}s | 总分: ${score}</p><ul>`;
+    for(let k in attempts) html += `<li>${k}: 尝试了 ${attempts[k]} 次</li>`;
+    html += `</ul><p><b>${gift}</b></p>`;
+    area.innerHTML = html;
+    speak("请点击 collect learning report。" + gift + "记得screenshot learning report to 老师。");
+    document.getElementById('btn-rev').className = '';
+}
+
+function showReview() {
+    document.getElementById('report-page').className = 'hidden';
+    document.getElementById('review-page').className = '';
+    const table = document.getElementById('rev-table');
+    table.innerHTML = "<tr><th>词语 (点击读音)</th><th>拼音</th><th>翻译</th></tr>";
+    vocab.forEach(i => {
+        let r = table.insertRow();
+        r.innerHTML = `<td style="color:blue; cursor:pointer" onclick="speak('${i.c}')">${i.c}</td><td>${i.p}</td><td>${i.e}</td>`;
+    });
+    speak("现在你可以点击蓝色的词语来听读音。");
+}
+</script>
+</body>
+</html>
